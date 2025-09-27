@@ -1,8 +1,8 @@
 ---
 - name: Bootstrap Talos cluster VMs in proxmox
-  ansible.builtin.include_tasks: proxmox.yml
-  when: bootstrap_proxmox | default(true)
+  ansible.builtin.import_tasks: proxmox.yml
+  when: bootstrap_proxmox | default(false)
 
 - name: Bootstrap Talos Cluster
-  ansible.builtin.include_tasks: talos.yml
-  when: bootstrap_talos_cluster | default(true)
+  ansible.builtin.import_tasks: talos.yml
+  when: bootstrap_talos_cluster | default(false)

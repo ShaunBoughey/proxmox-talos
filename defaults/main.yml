@@ -1,13 +1,19 @@
 ---
 # Proxmox
 bootstrap_proxmox: true
-proxmox_network: "192.168.0"
-proxmox_start_octet: 100
 proxmox_host: 192.168.0.200:8006
 proxmox_user: root@pam
-proxmox_password: "password_goes_here"
+proxmox_password: ""
+proxmox_token_id: ""
+proxmox_token_secret: ""
 proxmox_node: "proxmox"
 proxmox_datastore: "local-lvm"
+
+# IP scheme
+network: "192.168.0"
+start_octet: 100
+cidr: 24
+gateway: "192.168.0.1"
 
 # Talos Cluster
 talos_cluster_name: "dev_k8s"

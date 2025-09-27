@@ -47,13 +47,18 @@ Override via inventory, `group_vars`, or `extra_vars`. Store secrets with Ansibl
 bootstrap_proxmox: true
 proxmox_host: "192.168.0.200:8006"
 proxmox_user: "root@pam"
-proxmox_password: "REDACTED"            # use Ansible Vault
+# Use either API token (preferred) or password (one may be omitted)
+proxmox_token_id: ""                    # e.g. ansible@pve!token_name
+proxmox_token_secret: ""                # store with Ansible Vault
+proxmox_password: ""                    # store with Ansible Vault
 proxmox_node: "proxmox"
 proxmox_datastore: "local-lvm"
 
 # IP scheme
-proxmox_network: "192.168.0"            # network prefix (no last octet)
-proxmox_start_octet: 100                # first assigned octet; GW assumed at .1
+network: "192.168.0"                    # network prefix (no last octet)
+start_octet: 100                         # first assigned octet
+cidr: 24                                 # subnet mask length
+gateway: "192.168.0.1"                  # default gateway
 
 # Cluster layout
 talos_cluster_name: "dev_k8s"
@@ -106,10 +111,17 @@ talosctl --talosconfig=dev_k8s/talosconfig health
 - `proxmox_host` (str): `host:port` of Proxmox API
 - `proxmox_user` (str): API username (e.g. `root@pam`)
 - `proxmox_password` (str): API password (store with Vault)
+- `proxmox_token_id` (str): API token identifier (alternative to password)
+- `proxmox_token_secret` (str): API token secret (store with Vault)
 - `proxmox_node` (str): Proxmox node name
 - `proxmox_datastore` (str): Datastore for disks (e.g. `local-lvm`)
-- `proxmox_network` (str): Network prefix without last octet (e.g. `192.168.0`)
-- `proxmox_start_octet` (int): Starting host octet for IP allocation
+
+### IP Scheme
+
+- `network` (str): Network prefix without last octet (e.g. `192.168.0`)
+- `start_octet` (int): Starting host octet for IP allocation
+- `cidr` (int): Subnet mask length (e.g. `24`)
+- `gateway` (str): Default gateway IP (e.g. `192.168.0.1`)
 
 ### Talos Cluster
 

@@ -1,9 +1,9 @@
 ---
 - name: Define Talos node IP lists
   ansible.builtin.set_fact:
-    control_plane_ips: "{{ range(proxmox_start_octet, proxmox_start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', proxmox_network ~ '.\\1') | list }}"
-    worker_ips: "{{ range(proxmox_start_octet + (talos_cp_count | int), proxmox_start_octet + (talos_cp_count | int) + (talos_worker_count | int)) | map('regex_replace', '^(.*)$', proxmox_network ~ '.\\1') | list }}"
-    first_control_plane_ip: "{{ range(proxmox_start_octet, proxmox_start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', proxmox_network ~ '.\\1') | list | first }}"
+    control_plane_ips: "{{ range(start_octet, start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list }}"
+    worker_ips: "{{ range(start_octet + (talos_cp_count | int), start_octet + (talos_cp_count | int) + (talos_worker_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list }}"
+    first_control_plane_ip: "{{ range(start_octet, start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list | first }}"
 
 - name: Check if cluster config file exists
   ansible.builtin.stat:
