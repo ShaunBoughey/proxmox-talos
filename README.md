@@ -80,6 +80,13 @@ talos_worker_network: "vmbr0"
 
 # Bootstrap toggle
 bootstrap_talos_cluster: true
+
+# VIP (optional)
+vip_enabled: false
+vip_address: ""             # e.g. 192.168.0.50
+vip_interface: "eth0"
+vip_arp: true
+vip_namespace: "kube-system"
 ```
 
 ### 4) Run
@@ -135,6 +142,14 @@ talosctl --talosconfig=dev_k8s/talosconfig health
 - `talos_worker_network` (str): Proxmox bridge
 - `bootstrap_talos_cluster` (bool): Run Talos bootstrap flow (default: true)
 
+### VIP (API High Availability)
+
+- `vip_enabled` (bool): Enable Talos VIP on control-plane nodes
+- `vip_address` (str): Shared virtual IP on CP subnet (required when enabled)
+- `vip_interface` (str): Host interface name used for the VIP (default: `eth0`)
+- `vip_arp` (bool): Use ARP mode (recommended; BGP not managed by this role)
+- `vip_namespace` (str): Namespace for any VIP-related resources (default: `kube-system`)
+
 ## Outputs
 
 - Directory `./<talos_cluster_name>/` containing:
@@ -142,6 +157,7 @@ talosctl --talosconfig=dev_k8s/talosconfig health
   - `talosconfig`
   - `kubeconfig` (mode `0600`)
 - `talosctl` endpoint set to the first CP IP
+- `kubeconfig` is written directly to `./<talos_cluster_name>/kubeconfig` (not merged into `~/.kube/config`); when VIP is enabled, its `server` points at the VIP
 
 ## Monitoring
 
@@ -174,6 +190,5 @@ kubectl get nodes -o wide
 ## Notes and Limitations
 
 - VM names are fixed format: `talos-cp-*` and `talos-wrk-*`
-- Assumes a `/24` network and default gateway at `<network>.1`
 - Single NIC per VM; adjust role if multiple NICs are required
 - Does not delete or resize existing VMs; changes to counts/sizes may require manual reconciliation

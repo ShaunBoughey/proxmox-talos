@@ -31,10 +31,25 @@
 
 - name: Bootstrap the cluster if it is not already healthy
   block:
+  - name: Ensure Talos output directory exists
+    ansible.builtin.file:
+      path: "{{ talos_cluster_name }}"
+      state: directory
+      mode: '0755'
+    delegate_to: localhost
+
+  - name: Render Talos VIP control-plane patch when enabled
+    ansible.builtin.template:
+      src: controlplane-vip-patch.yaml.j2
+      dest: "{{ talos_cluster_name }}/controlplane-vip-patch.yaml"
+    delegate_to: localhost
+    when: vip_enabled and (vip_address | length) > 0
+
   - name: Generate Talos configuration files if they do not exist
     ansible.builtin.command: >
-      talosctl gen config {{ talos_cluster_name }} https://{{ first_control_plane_ip }}:6443 
+      talosctl gen config {{ talos_cluster_name }} https://{{ first_control_plane_ip }}:6443
       --install-disk {{ talos_install_disk }}
+      {% if vip_enabled and (vip_address | length) > 0 %}--config-patch-control-plane @{{ talos_cluster_name }}/controlplane-vip-patch.yaml{% endif %}
       --output-dir {{ talos_cluster_name }}
     args:
       creates: "{{ talos_cluster_name }}/controlplane.yaml"
@@ -79,13 +94,23 @@
     ansible.builtin.command: "talosctl bootstrap --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
   when: not talosconfig_stat.stat.exists or (cluster_health is defined and cluster_health.failed)
 
-- name: Fetch Kubeconfig and register the output
-  ansible.builtin.command: "talosctl kubeconfig --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
-  register: kubeconfig_output
+- name: Write kubeconfig to file
+  ansible.builtin.command: "talosctl kubeconfig {{ talos_cluster_name }}/kubeconfig --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
   changed_when: false
 
-- name: Save the Kubeconfig to a file
-  ansible.builtin.copy:
-    content: "{{ kubeconfig_output.stdout }}"
-    dest: "{{ talos_cluster_name }}/kubeconfig"
-    mode: '0600'
+- name: Switch kubeconfig to VIP after bootstrap (when enabled)
+  block:
+  - name: Wait for VIP API to become available
+    ansible.builtin.wait_for:
+      host: "{{ vip_address }}"
+      port: 6443
+      delay: 5
+      timeout: 180
+    when: vip_enabled and (vip_address | length) > 0
+
+  - name: Point kubeconfig at VIP server
+    ansible.builtin.replace:
+      path: "{{ talos_cluster_name }}/kubeconfig"
+      regexp: "server: https://{{ first_control_plane_ip | regex_escape }}:6443"
+      replace: "server: https://{{ vip_address }}:6443"
+    when: vip_enabled and (vip_address | length) > 0

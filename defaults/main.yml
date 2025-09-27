@@ -29,3 +29,10 @@ talos_worker_memory: 4096
 talos_worker_disk: 20
 talos_worker_network: "vmbr0"
 bootstrap_talos_cluster: true
+
+# VIP (API HA)
+vip_enabled: true
+vip_interface: "eth0"
+vip_address: "192.168.0.150"
+vip_arp: true
+vip_namespace: "kube-system"
