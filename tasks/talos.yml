@@ -1,0 +1,91 @@
+---
+- name: Define Talos node IP lists
+  ansible.builtin.set_fact:
+    control_plane_ips: "{{ range(proxmox_start_octet, proxmox_start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', proxmox_network ~ '.\\1') | list }}"
+    worker_ips: "{{ range(proxmox_start_octet + (talos_cp_count | int), proxmox_start_octet + (talos_cp_count | int) + (talos_worker_count | int)) | map('regex_replace', '^(.*)$', proxmox_network ~ '.\\1') | list }}"
+    first_control_plane_ip: "{{ range(proxmox_start_octet, proxmox_start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', proxmox_network ~ '.\\1') | list | first }}"
+
+- name: Check if cluster config file exists
+  ansible.builtin.stat:
+    path: "{{ talos_cluster_name }}/talosconfig"
+  register: talosconfig_stat
+
+- name: Check if the cluster is already bootstrapped
+  ansible.builtin.command: "talosctl health --talosconfig={{ talos_cluster_name }}/talosconfig --nodes {{ first_control_plane_ip }}"
+  register: cluster_health
+  changed_when: false
+  ignore_errors: true
+  when: talosconfig_stat.stat.exists
+
+- name: debug control_plane_ips
+  ansible.builtin.debug:
+    var: control_plane_ips
+
+- name: debug worker_ips
+  ansible.builtin.debug:
+    var: worker_ips
+
+- name: debug first_control_plane_ip
+  ansible.builtin.debug:
+    var: first_control_plane_ip
+
+- name: Bootstrap the cluster if it is not already healthy
+  block:
+  - name: Generate Talos configuration files if they do not exist
+    ansible.builtin.command: >
+      talosctl gen config {{ talos_cluster_name }} https://{{ first_control_plane_ip }}:6443 
+      --install-disk {{ talos_install_disk }}
+      --output-dir {{ talos_cluster_name }}
+    args:
+      creates: "{{ talos_cluster_name }}/controlplane.yaml"
+    delegate_to: localhost
+
+  - name: Wait for all control plane nodes to become available
+    ansible.builtin.wait_for:
+      host: "{{ item }}"
+      port: 50000
+      delay: 10
+      timeout: 300
+    loop: "{{ control_plane_ips }}"
+    loop_control:
+      loop_var: item
+
+  - name: Apply config to all control plane nodes
+    ansible.builtin.command: "talosctl apply-config --insecure --nodes {{ item }} --file {{ talos_cluster_name }}/controlplane.yaml"
+    loop: "{{ control_plane_ips }}"
+    loop_control:
+      loop_var: item
+
+  - name: Wait for all worker nodes to become available
+    ansible.builtin.wait_for:
+      host: "{{ item }}"
+      port: 50000
+      delay: 10
+      timeout: 300
+    loop: "{{ worker_ips }}"
+    loop_control:
+      loop_var: item
+
+  - name: Apply config to all worker nodes
+    ansible.builtin.command: "talosctl apply-config --insecure --nodes {{ item }} --file {{ talos_cluster_name }}/worker.yaml"
+    loop: "{{ worker_ips }}"
+    loop_control:
+      loop_var: item
+
+  - name: Set talosconfig endpoints
+    ansible.builtin.command: "talosctl --talosconfig={{ talos_cluster_name }}/talosconfig config endpoints {{ first_control_plane_ip }}"
+
+  - name: Bootstrap the cluster
+    ansible.builtin.command: "talosctl bootstrap --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
+  when: not talosconfig_stat.stat.exists or (cluster_health is defined and cluster_health.failed)
+
+- name: Fetch Kubeconfig and register the output
+  ansible.builtin.command: "talosctl kubeconfig --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
+  register: kubeconfig_output
+  changed_when: false
+
+- name: Save the Kubeconfig to a file
+  ansible.builtin.copy:
+    content: "{{ kubeconfig_output.stdout }}"
+    dest: "{{ talos_cluster_name }}/kubeconfig"
+    mode: '0600'

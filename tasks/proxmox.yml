@@ -1,0 +1,76 @@
+---
+- name: "Create {{ talos_cp_count }} Talos Control Plane VM(s)"
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_host }}"
+    api_user: "{{ proxmox_user }}"
+    api_password: "{{ proxmox_password }}"
+    node: "{{ proxmox_node }}"
+    name: "talos-cp-{{ item + 1 }}"
+    cores: "{{ talos_cp_cores }}"
+    cpu: host
+    memory: "{{ talos_cp_memory }}"
+    ipconfig:
+      ipconfig0: 'ip={{ proxmox_network }}.{{ proxmox_start_octet + item }}/24,gw={{ proxmox_network }}.1'
+    virtio:
+      virtio0: '{{ proxmox_datastore }}:{{ talos_cp_disk }}'
+    net:
+      net0: 'virtio,bridge={{ talos_cp_network }},rate=200'
+    ide:
+      ide1: '{{ proxmox_datastore }}:cloudinit'
+      ide2: 'local:iso/talos-amd64.iso,media=cdrom'
+    boot: "order=ide2;virtio0"
+    onboot: true
+    state: present
+  loop: "{{ range(talos_cp_count | int) }}"
+
+- name: "Create {{ talos_worker_count }} Talos Worker VM(s)"
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_host }}"
+    api_user: "{{ proxmox_user }}"
+    api_password: "{{ proxmox_password }}"
+    node: "{{ proxmox_node }}"
+    name: "talos-wrk-{{ item + 1 }}"
+    cores: "{{ talos_worker_cores }}"
+    cpu: host
+    memory: "{{ talos_worker_memory }}"
+    ipconfig:
+      ipconfig0: 'ip={{ proxmox_network }}.{{ proxmox_start_octet + (talos_cp_count | int) + item }}/24,gw={{ proxmox_network }}.1'
+    virtio:
+      virtio0: '{{ proxmox_datastore }}:{{ talos_worker_disk }}'
+    net:
+      net0: 'virtio,bridge={{ talos_worker_network }},rate=200'
+    ide:
+      ide1: '{{ proxmox_datastore }}:cloudinit'
+      ide2: 'local:iso/talos-amd64.iso,media=cdrom'
+    boot: "order=ide2;virtio0"
+    onboot: true
+    state: present
+  loop: "{{ range(talos_worker_count | int) }}"
+
+- name: "Ensure Talos Control Plane VMs are running"
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_host }}"
+    api_user: "{{ proxmox_user }}"
+    api_password: "{{ proxmox_password }}"
+    node: "{{ proxmox_node }}"
+    name: "talos-cp-{{ item + 1 }}"
+    state: started
+  register: start_cp_result
+  until: not start_cp_result.failed
+  retries: 10
+  delay: 5
+  loop: "{{ range(talos_cp_count | int) }}"
+
+- name: "Ensure Talos Worker VMs are running"
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_host }}"
+    api_user: "{{ proxmox_user }}"
+    api_password: "{{ proxmox_password }}"
+    node: "{{ proxmox_node }}"
+    name: "talos-wrk-{{ item + 1 }}"
+    state: started
+  register: start_worker_result
+  until: not start_worker_result.failed
+  retries: 10
+  delay: 5
+  loop: "{{ range(talos_worker_count | int) }}"

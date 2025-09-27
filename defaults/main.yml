@@ -1,0 +1,25 @@
+---
+# Proxmox
+bootstrap_proxmox: true
+proxmox_network: "192.168.0"
+proxmox_start_octet: 100
+proxmox_host: 192.168.0.200:8006
+proxmox_user: root@pam
+proxmox_password: "password_goes_here"
+proxmox_node: "proxmox"
+proxmox_datastore: "local-lvm"
+
+# Talos Cluster
+talos_cluster_name: "dev_k8s"
+talos_install_disk: "/dev/vda"
+talos_cp_count: 1
+talos_cp_cores: 1
+talos_cp_memory: 2048
+talos_cp_disk: 20
+talos_cp_network: "vmbr0"
+talos_worker_count: 2
+talos_worker_cores: 2
+talos_worker_memory: 4096
+talos_worker_disk: 20
+talos_worker_network: "vmbr0"
+bootstrap_talos_cluster: true
