@@ -10,6 +10,41 @@ This role provisions a Talos-based Kubernetes cluster on Proxmox and bootstraps 
 - **Health-aware Idempotence**: Skips bootstrap if the cluster is already healthy
 - **Local Artifacts**: Writes `talosconfig` and `kubeconfig` into `./<cluster_name>/`
 
+## Upgrades
+
+Talos OS upgrades are API-driven and safe (A/B images with automatic rollback). This role provides a dedicated upgrade flow that serializes upgrades across nodes and is idempotent.
+
+Reference: [Talos: Upgrading Talos Linux](https://www.talos.dev/v1.11/talos-guides/upgrading-talos/)
+
+### Enable and run upgrades
+
+1) Set your target installer image (version):
+
+```yaml
+talos_installer_image: "ghcr.io/siderolabs/installer:v1.11.2"
+```
+
+2) Either enable the flag or use tags:
+
+```yaml
+talos_upgrade_enabled: true
+```
+
+Or via tags:
+
+```bash
+ansible-playbook -i inventory.ini site.yml --tags upgrade
+```
+
+3) Optional behaviors:
+
+- `talos_upgrade_stage: true` to use staged upgrade when files are held open
+- `talos_upgrade_wait: true` to wait and stream progress
+
+### Idempotency
+
+Before upgrading, the role runs `talosctl version` per node and compares against the version parsed from `talos_installer_image`. If they match, the upgrade step for that node is skipped.
+
 ## Quick Start
 
 ### 1) Requirements
@@ -150,6 +185,13 @@ talosctl --talosconfig=dev_k8s/talosconfig health
 - `vip_arp` (bool): Use ARP mode (recommended; BGP not managed by this role)
 - `vip_namespace` (str): Namespace for any VIP-related resources (default: `kube-system`)
 
+### Upgrades
+
+- `talos_upgrade_enabled` (bool): Import and run upgrade tasks (default: false)
+- `talos_installer_image` (str): e.g. `ghcr.io/siderolabs/installer:v1.11.2`
+- `talos_upgrade_stage` (bool): Use `--stage` upgrade mode (default: false)
+- `talos_upgrade_wait` (bool): Use `--wait` to observe upgrade (default: true)
+
 ## Outputs
 
 - Directory `./<talos_cluster_name>/` containing:
@@ -186,6 +228,23 @@ kubectl get nodes -o wide
   - The role skips bootstrap if healthy; to force a fresh run, ensure the cluster is not healthy and/or remove `./<cluster_name>/talosconfig` (caution), or recreate VMs
 - **Credentials**
   - Use Ansible Vault for `proxmox_password`. Do not commit secrets.
+
+## Tags
+
+You can target specific parts of the role using tags:
+
+- `talos`: General tag applied to Talos-related operations
+- `upgrade`: Runs the Talos OS upgrade flow (`tasks/upgrade.yml`). Usually combined with `talos`.
+- `destroy`: Paired with `never`; use to explicitly stop/delete VMs:
+
+```bash
+# stop worker and control plane VMs (requires --tags destroy)
+ansible-playbook -i inventory.ini site.yml --tags destroy
+```
+
+Notes:
+- Destructive actions in `tasks/proxmox.yml` are tagged `[destroy, never]`, so they run only when explicitly requested via `--tags destroy`.
+- Upgrade tasks are included when `talos_upgrade_enabled: true` or when run with `--tags upgrade`.
 
 ## Notes and Limitations
 

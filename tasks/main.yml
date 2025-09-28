@@ -6,3 +6,8 @@
 - name: Bootstrap Talos Cluster
   ansible.builtin.import_tasks: talos.yml
   when: bootstrap_talos_cluster | default(false)
+
+- name: Upgrade Talos Cluster
+  ansible.builtin.import_tasks: upgrade.yml
+  when: talos_upgrade_enabled | default(false)
+  tags: [upgrade, talos]

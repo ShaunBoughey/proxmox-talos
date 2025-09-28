@@ -1,0 +1,88 @@
+---
+- name: Define Talos node IP lists (upgrade)
+  ansible.builtin.set_fact:
+    control_plane_ips: "{{ range(start_octet, start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list }}"
+    worker_ips: "{{ range(start_octet + (talos_cp_count | int), start_octet + (talos_cp_count | int) + (talos_worker_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list }}"
+
+- name: Derive target Talos version from installer image
+  ansible.builtin.set_fact:
+    talos_target_version: "{{ talos_installer_image | regex_search('v\\d+\\.\\d+\\.\\d+') }}"
+
+- name: Get current Talos version on control plane nodes
+  ansible.builtin.command: >
+    talosctl version
+    --nodes {{ item }}
+    --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
+  loop: "{{ control_plane_ips }}"
+  loop_control:
+    loop_var: item
+  register: cp_versions
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  tags: [upgrade, talos]
+
+- name: Build control plane version map
+  ansible.builtin.set_fact:
+    cp_node_version_map: "{{ cp_node_version_map | default({}) | combine({ item.item: ((item.stdout | regex_findall('v\\d+\\.\\d+\\.\\d+')) | last | default('')) }) }}"
+  loop: "{{ cp_versions.results | default([]) }}"
+  loop_control:
+    loop_var: item
+  tags: [upgrade, talos]
+
+- name: Upgrade control plane nodes (serialize)
+  ansible.builtin.command: >
+    talosctl upgrade
+    --nodes {{ item }}
+    --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
+    --image {{ talos_installer_image }}
+    {{ '--stage' if talos_upgrade_stage else '' }}
+    {{ '--wait' if talos_upgrade_wait else '' }}
+  loop: "{{ control_plane_ips }}"
+  loop_control:
+    loop_var: item
+  changed_when: true
+  when: (cp_node_version_map[item] | default('')) != talos_target_version
+  throttle: 1
+  delegate_to: localhost
+  tags: [upgrade, talos]
+
+- name: Get current Talos version on worker nodes
+  ansible.builtin.command: >
+    talosctl version
+    --nodes {{ item }}
+    --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
+  loop: "{{ worker_ips }}"
+  loop_control:
+    loop_var: item
+  register: worker_versions
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  tags: [upgrade, talos]
+
+- name: Build worker version map
+  ansible.builtin.set_fact:
+    worker_node_version_map: "{{ worker_node_version_map | default({}) | combine({ item.item: ((item.stdout | regex_findall('v\\d+\\.\\d+\\.\\d+')) | last | default('')) }) }}"
+  loop: "{{ worker_versions.results | default([]) }}"
+  loop_control:
+    loop_var: item
+  tags: [upgrade, talos]
+
+- name: Upgrade worker nodes (serialize)
+  ansible.builtin.command: >
+    talosctl upgrade
+    --nodes {{ item }}
+    --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
+    --image {{ talos_installer_image }}
+    {{ '--stage' if talos_upgrade_stage else '' }}
+    {{ '--wait' if talos_upgrade_wait else '' }}
+  loop: "{{ worker_ips }}"
+  loop_control:
+    loop_var: item
+  changed_when: true
+  when: (worker_node_version_map[item] | default('')) != talos_target_version
+  throttle: 1
+  delegate_to: localhost
+  tags: [upgrade, talos]
+

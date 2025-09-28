@@ -36,3 +36,9 @@ vip_interface: "eth0"
 vip_address: "192.168.0.150"
 vip_arp: true
 vip_namespace: "kube-system"
+
+# Talos upgrade
+talos_upgrade_enabled: false
+talos_installer_image: "ghcr.io/siderolabs/installer:v1.11.2"
+talos_upgrade_stage: false
+talos_upgrade_wait: true
