@@ -71,7 +71,7 @@
 
   - name: Generate Talos configuration files if they do not exist
     ansible.builtin.command: >
-      talosctl gen config {{ talos_cluster_name }} https://{{ first_control_plane_ip }}:6443
+      talosctl gen config {{ talos_cluster_name }} https://{{ (vip_enabled and (vip_address | length) > 0) | ternary(vip_address, first_control_plane_ip) }}:6443
       --install-disk {{ talos_install_disk }}
       --with-secrets {{ talos_cluster_name }}/secrets.yaml
       --kubernetes-version {{ talos_kubernetes_version }}
@@ -127,7 +127,7 @@
     delegate_to: localhost
 
   - name: Set talosconfig endpoints
-    ansible.builtin.command: "talosctl --talosconfig={{ talos_cluster_name }}/talosconfig config endpoints {{ first_control_plane_ip }}"
+    ansible.builtin.command: "talosctl --talosconfig={{ talos_cluster_name }}/talosconfig config endpoints {% if vip_enabled and (vip_address | length) > 0 %}{{ vip_address }} {% endif %}{{ control_plane_ips | join(' ') }}"
 
   - name: Bootstrap the cluster
     ansible.builtin.command: "talosctl bootstrap --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
