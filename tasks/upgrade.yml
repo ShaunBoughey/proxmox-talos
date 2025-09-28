@@ -42,8 +42,27 @@
   loop_control:
     loop_var: item
   changed_when: true
+  register: cp_upgrade_result
+  failed_when: cp_upgrade_result.rc != 0 and ('client connection is closing' not in (cp_upgrade_result.stderr | default('')))
   when: (cp_node_version_map[item] | default('')) != talos_target_version
   throttle: 1
+  delegate_to: localhost
+  tags: [upgrade, talos]
+
+- name: Verify control plane node version after upgrade
+  ansible.builtin.command: >
+    talosctl version
+    --nodes {{ item }}
+    --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
+  loop: "{{ control_plane_ips }}"
+  loop_control:
+    loop_var: item
+  register: cp_verify
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: "'{{ talos_target_version }}' in cp_verify.stdout"
+  when: (cp_node_version_map[item] | default('')) != talos_target_version
   delegate_to: localhost
   tags: [upgrade, talos]
 
@@ -81,8 +100,27 @@
   loop_control:
     loop_var: item
   changed_when: true
+  register: worker_upgrade_result
+  failed_when: worker_upgrade_result.rc != 0 and ('client connection is closing' not in (worker_upgrade_result.stderr | default('')))
   when: (worker_node_version_map[item] | default('')) != talos_target_version
   throttle: 1
+  delegate_to: localhost
+  tags: [upgrade, talos]
+
+- name: Verify worker node version after upgrade
+  ansible.builtin.command: >
+    talosctl version
+    --nodes {{ item }}
+    --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
+  loop: "{{ worker_ips }}"
+  loop_control:
+    loop_var: item
+  register: worker_verify
+  changed_when: false
+  retries: 30
+  delay: 10
+  until: "'{{ talos_target_version }}' in worker_verify.stdout"
+  when: (worker_node_version_map[item] | default('')) != talos_target_version
   delegate_to: localhost
   tags: [upgrade, talos]
 

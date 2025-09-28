@@ -18,7 +18,7 @@ gateway: "192.168.0.1"
 # Talos Cluster
 talos_cluster_name: "dev_k8s"
 talos_install_disk: "/dev/vda"
-talos_cp_count: 1
+talos_cp_count: 3
 talos_cp_cores: 1
 talos_cp_memory: 2048
 talos_cp_disk: 20

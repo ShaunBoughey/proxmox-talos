@@ -1,3 +1,32 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# handlers file for talos-k8s
+- name: Eject ISO and set disk boot for control plane VMs
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_host }}"
+    api_user: "{{ proxmox_user }}"
+    api_token_id: "{{ proxmox_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_token_secret | default(omit) }}"
+    api_password: "{{ proxmox_password | default(omit) }}"
+    node: "{{ proxmox_node }}"
+    name: "talos-cp-{{ item + 1 }}"
+    delete: 'ide2'
+  loop: "{{ range(talos_cp_count | int) }}"
+  when: bootstrap_proxmox and (talos_cp_count | int) > 0
+  loop_control:
+    label: "talos-cp-{{ item + 1 }}"
+  delegate_to: localhost
+
+- name: Eject ISO and set disk boot for worker VMs
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_host }}"
+    api_user: "{{ proxmox_user }}"
+    api_token_id: "{{ proxmox_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_token_secret | default(omit) }}"
+    api_password: "{{ proxmox_password | default(omit) }}"
+    node: "{{ proxmox_node }}"
+    name: "talos-wrk-{{ item + 1 }}"
+    delete: 'ide2'
+  loop: "{{ range(talos_worker_count | int) }}"
+  when: bootstrap_proxmox and (talos_worker_count | int) > 0
+  loop_control:
+    label: "talos-wrk-{{ item + 1 }}"
+  delegate_to: localhost

@@ -92,21 +92,26 @@
 
   - name: Bootstrap the cluster
     ansible.builtin.command: "talosctl bootstrap --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
-  when: not talosconfig_stat.stat.exists or (cluster_health is defined and cluster_health.failed)
+    notify:
+      - Eject ISO and set disk boot for control plane VMs
+      - Eject ISO and set disk boot for worker VMs
+  
+  - name: Write kubeconfig to file
+    ansible.builtin.command: "talosctl kubeconfig {{ talos_cluster_name }}/kubeconfig --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
+    changed_when: false
 
-- name: Write kubeconfig to file
-  ansible.builtin.command: "talosctl kubeconfig {{ talos_cluster_name }}/kubeconfig --nodes {{ first_control_plane_ip }} --talosconfig={{ talos_cluster_name }}/talosconfig"
-  changed_when: false
-
-- name: Switch kubeconfig to VIP after bootstrap (when enabled)
-  block:
-  - name: Wait for VIP API to become available
-    ansible.builtin.wait_for:
-      host: "{{ vip_address }}"
-      port: 6443
-      delay: 5
-      timeout: 180
+  - name: Switch kubeconfig to VIP after bootstrap (when enabled)
+    block:
+    - name: Wait for VIP API to become available
+      ansible.builtin.wait_for:
+        host: "{{ vip_address }}"
+        port: 6443
+        delay: 5
+        timeout: 180
     when: vip_enabled and (vip_address | length) > 0
+
+  - name: Flush handlers (post-bootstrap)
+    ansible.builtin.meta: flush_handlers
 
   - name: Point kubeconfig at VIP server
     ansible.builtin.replace:
@@ -114,3 +119,4 @@
       regexp: "server: https://{{ first_control_plane_ip | regex_escape }}:6443"
       replace: "server: https://{{ vip_address }}:6443"
     when: vip_enabled and (vip_address | length) > 0
+  when: not talosconfig_stat.stat.exists or (cluster_health is defined and cluster_health.failed)
