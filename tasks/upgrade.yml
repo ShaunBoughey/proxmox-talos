@@ -4,9 +4,16 @@
     control_plane_ips: "{{ range(start_octet, start_octet + (talos_cp_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list }}"
     worker_ips: "{{ range(start_octet + (talos_cp_count | int), start_octet + (talos_cp_count | int) + (talos_worker_count | int)) | map('regex_replace', '^(.*)$', (gateway | regex_replace('\\.\\d+$', '')) ~ '.\\1') | list }}"
 
-- name: Derive target Talos version from installer image
+- name: Assert required talos_version is set
+  ansible.builtin.assert:
+    that:
+      - talos_version is defined
+      - talos_version | length > 0
+    fail_msg: "talos_version is required for upgrade"
+
+- name: Set target Talos version from variable
   ansible.builtin.set_fact:
-    talos_target_version: "{{ talos_installer_image | regex_search('v\\d+\\.\\d+\\.\\d+') }}"
+    talos_target_version: "{{ talos_version }}"
 
 - name: Get current Talos version on control plane nodes
   ansible.builtin.command: >
@@ -35,7 +42,7 @@
     talosctl upgrade
     --nodes {{ item }}
     --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
-    --image {{ talos_installer_image }}
+    --image ghcr.io/siderolabs/installer:{{ talos_version }}
     {{ '--stage' if talos_upgrade_stage else '' }}
     {{ '--wait' if talos_upgrade_wait else '' }}
   loop: "{{ control_plane_ips }}"
@@ -93,7 +100,7 @@
     talosctl upgrade
     --nodes {{ item }}
     --talosconfig {{ playbook_dir }}/{{ talos_cluster_name }}/talosconfig
-    --image {{ talos_installer_image }}
+    --image ghcr.io/siderolabs/installer:{{ talos_version }}
     {{ '--stage' if talos_upgrade_stage else '' }}
     {{ '--wait' if talos_upgrade_wait else '' }}
   loop: "{{ worker_ips }}"

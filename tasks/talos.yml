@@ -31,11 +31,35 @@
 
 - name: Bootstrap the cluster if it is not already healthy
   block:
+  - name: Assert required reproducible config inputs are set
+    ansible.builtin.assert:
+      that:
+        - talos_version is defined
+        - talos_version | length > 0
+        - talos_kubernetes_version is defined
+        - talos_kubernetes_version | length > 0
+      fail_msg: "talos_version and talos_kubernetes_version are required for reproducible config generation"
+    delegate_to: localhost
+
   - name: Ensure Talos output directory exists
     ansible.builtin.file:
       path: "{{ talos_cluster_name }}"
       state: directory
       mode: '0755'
+    delegate_to: localhost
+
+  - name: Check if secrets bundle exists
+    ansible.builtin.stat:
+      path: "{{ talos_cluster_name }}/secrets.yaml"
+    register: talos_secrets_stat
+    delegate_to: localhost
+
+  - name: Generate Talos secrets bundle when missing
+    ansible.builtin.command: >
+      talosctl gen secrets
+      --talos-version {{ talos_version }}
+      -o {{ talos_cluster_name }}/secrets.yaml
+    when: not talos_secrets_stat.stat.exists
     delegate_to: localhost
 
   - name: Render Talos VIP control-plane patch when enabled
@@ -49,6 +73,9 @@
     ansible.builtin.command: >
       talosctl gen config {{ talos_cluster_name }} https://{{ first_control_plane_ip }}:6443
       --install-disk {{ talos_install_disk }}
+      --with-secrets {{ talos_cluster_name }}/secrets.yaml
+      --kubernetes-version {{ talos_kubernetes_version }}
+      --talos-version {{ talos_version }}
       {% if vip_enabled and (vip_address | length) > 0 %}--config-patch-control-plane @{{ talos_cluster_name }}/controlplane-vip-patch.yaml{% endif %}
       --output-dir {{ talos_cluster_name }}
     args:
@@ -86,6 +113,18 @@
     loop: "{{ worker_ips }}"
     loop_control:
       loop_var: item
+
+  - name: Remove generated controlplane.yaml to avoid storing final state
+    ansible.builtin.file:
+      path: "{{ talos_cluster_name }}/controlplane.yaml"
+      state: absent
+    delegate_to: localhost
+
+  - name: Remove generated worker.yaml to avoid storing final state
+    ansible.builtin.file:
+      path: "{{ talos_cluster_name }}/worker.yaml"
+      state: absent
+    delegate_to: localhost
 
   - name: Set talosconfig endpoints
     ansible.builtin.command: "talosctl --talosconfig={{ talos_cluster_name }}/talosconfig config endpoints {{ first_control_plane_ip }}"
